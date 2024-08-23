@@ -1,0 +1,101 @@
+<!-- This is the use case page -->
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Use Cases</title>
+    <style>
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background-color: #000000;
+            color: #ffffff;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .title {
+            margin: 20px 0;
+        }
+        .scenarios-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .scenario {
+            margin: 20px 0;
+            text-align: center;
+        }
+        .scenario img {
+            cursor: pointer;
+            width: 200px;
+            height: 150px;
+            object-fit: cover;
+            border: 2px solid #ffffff;
+            border-radius: 8px;
+            transition: transform 0.3s;
+        }
+        .scenario img:hover {
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+    <!-- Title  -->
+    <div class="title">
+        <h1 id="greeting">Please Choose your Scenario </h1>
+    </div>
+
+    <!-- Scenarios (presentation and interview) with descriptions -->
+    <div class="scenarios-container">
+        <div class="scenario">
+            <h2>Presentation</h2>
+            <p>Select this scenario to prepare for your presentation to an audience</p>
+            <!-- Clickable image for Scenario 1 (presentation)-->
+            <img src="{{ url_for('static', filename='Images/1.png') }}" alt="Image for Scenario 1" onclick="selectScenario('Presentation', 'Presentation')">
+        </div>
+
+        <div class="scenario">
+            <h2>Interview</h2>
+            <p>Select this scenario to practice 1-1 interviews</p>
+            <!-- Clickable image for Scenario 2  (interview)-->
+            <img src="{{ url_for('static', filename='Images/2.jpeg') }}" alt="Image for Scenario 2" onclick="selectScenario('Interview', 'Interview')">
+        </div>
+    </div>
+
+    <script>
+        // Function to get username from query parameters
+        function getQueryParams() {
+            const params = {};
+            window.location.search.substring(1).split("&").forEach(pair => {
+                const [key, value] = pair.split("=");
+                params[decodeURIComponent(key)] = decodeURIComponent(value);
+            });
+            return params;
+        }
+
+        // Function to capitalize the first letter of a string (for Username)
+        function capitalizeFirstLetter(string) {
+            return string.charAt(0).toUpperCase() + string.slice(1).toLowerCase();
+        }
+
+        // Display greeting with users username
+        const params = getQueryParams();
+        const username = params['username'] ? capitalizeFirstLetter(params['username']) : 'User'; //if username then run function to capitalize the first letter of a string
+        document.getElementById('greeting').innerText = `Hi, ${username}! Please Choose your Scenario`;
+
+        // Function logs selected scenario, store in local storage, then redirects  user to gaze tracking page (index.html)
+        function selectScenario(scenario, scenarioDescription) { 
+            console.log(`Selected scenario: ${scenario}, description: ${scenarioDescription}`); 
+            localStorage.setItem('selectedScenario', scenario);
+            localStorage.setItem('selectedScenarioDescription', scenarioDescription);
+            window.location.href = '/';  //redirect to gaze tracking page (index.html)
+        }
+    </script>
+</body>
+</html>

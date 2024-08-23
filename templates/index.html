@@ -1,0 +1,284 @@
+<!-- This is the gaze tracking page -->
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Gaze Tracker</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background-color: #000000;
+            color: #ffffff;
+            margin: 0;
+            padding: 0;
+        }
+        .title {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 40px;
+            margin-bottom: 20px;
+        }
+        .title h1 {
+            font-weight: 700;
+            font-size: 36px;
+            margin: 0;
+            display: flex;
+            align-items: center;
+        }
+        .title i {
+            font-size: 36px;
+            color: #4BC0C0;
+            margin-left: 10px;
+        }
+        h2 {
+            font-weight: 400;
+            font-size: 15px;
+            text-align: center;
+            margin-top: 10px;
+        }
+        .video-container {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 20px;
+        }
+        video {
+            width: 1000px;
+            height: 650px;
+            border: 2px solid #000000;
+            border-radius: 8px;
+        }
+        .button-container {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        button {
+            margin: 0 5px;
+            padding: 10px 20px;
+            font-size: 18px;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:disabled {
+            background-color: #aaa;
+            cursor: not-allowed;
+        }
+        .output {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        /*
+        .most-common {
+            display: none;
+            text-align: center;
+            margin-top: 20px;    update: most common gaze no longer displayed on this page 
+        }
+        */
+        .gaze-direction {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 10px;
+        }
+        .gaze-direction i {
+            font-size: 24px;
+            margin-right: 10px;
+        }
+        canvas {
+            display: block;
+            margin: 0 auto;
+            margin-top: 20px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            width: 870px;
+            height: 650px;
+        }
+    </style>
+</head>
+<body>
+    <div class="title">
+        <h1>My Gaze Tracker<i class="fas fa-eye"></i></h1>  <!--Title with eye icon -->
+    </div>
+    <h2>Track, Blink, Analyze: Your Gaze Matters!</h2> <!-- Subtitle -->
+    <div class="video-container">
+        <video id="video" autoplay></video>
+        <div class="button-container">
+            <button id="startButton">Start Tracking</button>
+            <button id="stopButton" disabled>Stop Tracking</button>
+            <button id="viewProgressButton">View Progress</button>
+        </div>
+    </div>
+    <div class="output">
+        <h2>Gaze Direction</h2>
+        <p id="gaze-direction"></p>
+    </div>
+    <!--
+    <div class="most-common">  update: most common gaze no longer displayed on this page
+        <h2>Most Common Gaze Direction</h2>
+        <div class="gaze-direction">
+            <i class="fas fa-eye" style="color: #4BC0C0;"></i>
+            <p id="most-common-direction">-</p>
+        </div>
+    </div>
+    -->
+    <canvas id="gazeChart"></canvas>
+    <script>
+        $(document).ready(function() {
+            let video = document.getElementById('video');
+            let gazeData = { 'Looking right': 0, 'Looking left': 0, 'Looking center': 0, 'Blinking': 0, 'No gaze detected': 0 };
+            let sessionScores = JSON.parse(localStorage.getItem('sessionScores')) || [];
+
+            // Function to update the bar chart 
+            function updateChart() {
+                chart.data.datasets[0].data = [
+                    gazeData['Looking right'],
+                    gazeData['Looking left'],
+                    gazeData['Looking center'],
+                    gazeData['Blinking'],
+                    gazeData['No gaze detected']
+                ];
+                chart.update();
+            }
+
+            // Function to get most common gaze direction - update: not used here:
+            /*
+            function updateMostCommonDirection() {
+                const mostCommonDirection = Object.keys(gazeData).reduce((a, b) => gazeData[a] > gazeData[b] ? a : b);
+                switch (mostCommonDirection) {
+                    case 'Looking right':
+                        $('#most-common-direction').text('Most common direction: ' + mostCommonDirection );
+                        break;
+                    case 'Looking center':
+                        $('#most-common-direction').text('Most common direction: ' + mostCommonDirection );
+                        break;
+                    case 'Looking left':
+                        $('#most-common-direction').text('Most common direction: ' + mostCommonDirection );
+                        break;
+                    case 'Blinking':
+                        $('#most-common-direction').text('Most common direction: ' + mostCommonDirection + '. Try to blink naturally without overdoing it.');
+                        break;
+                    case 'No gaze detected':
+                        $('#most-common-direction').text('Most common direction: ' + mostCommonDirection + '. Ensure your face is well-lit and visible to the camera.');
+                        break;
+                    default:
+                        $('#most-common-direction').text('No gaze direction data available.');
+                }
+            }
+            */
+
+            // Start tracking button click handler
+            $('#startButton').click(function() {
+                $('.output').show();
+                //$('.most-common').hide();
+                $('#stopButton').prop('disabled', false);
+                $('#startButton').prop('disabled', true);
+                navigator.mediaDevices.getUserMedia({ video: true })
+                    .then(stream => {
+                        video.srcObject = stream;
+                        video.play();
+                    })
+                    .catch(err => {
+                        console.error("Error accessing the webcam: ", err);
+                    });
+            });
+
+            // Stop tracking button click handler
+            $('#stopButton').click(function() {
+                $('.output').hide();
+                //$('.most-common').show(); (hidden)
+                $('#stopButton').prop('disabled', true);
+                $('#startButton').prop('disabled', false);
+                let tracks = video.srcObject.getTracks();
+                tracks.forEach(track => track.stop());
+                video.srcObject = null;
+
+                console.log('Gaze Data on stop:', gazeData); // Debugging log
+                localStorage.setItem('gazeData', JSON.stringify(gazeData)); // Store gaze data in local storage
+
+                sessionScores.push({ date: new Date().toISOString() }); // Add date to the session scores
+                localStorage.setItem('sessionScores', JSON.stringify(sessionScores)); // Store session scores in local storage
+            });
+
+            // View progress button click handler
+            $('#viewProgressButton').click(function() {
+                window.location.href = '/progress';  //takes userto progress page when clicked
+            });
+
+            // Function to update gaze direction
+            function updateGazeDirection(direction) {
+                $('#gaze-direction').text(direction);
+                gazeData[direction]++;
+                console.log('Updated gazeData:', gazeData); 
+                updateChart();
+                //updateMostCommonDirection();
+            }
+
+            // Function to fetch live gaze direction data
+            function fetchGazeDirection() {
+                $.ajax({
+                    url: '/gaze_direction',
+                    type: 'GET',
+                    success: function(data) {
+                        console.log('Fetched gaze direction:', data.direction); 
+                        updateGazeDirection(data.direction);
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Error fetching gaze direction:', error);
+                    }
+                });
+            }
+
+            //  Chart.js for gaze direction chart
+            const gazeChart = document.getElementById('gazeChart').getContext('2d');
+            const chart = new Chart(gazeChart, {
+                type: 'bar',
+                data: {
+                    labels: ['Looking right', 'Looking left', 'Looking center', 'Blinking', 'No gaze detected'],
+                    datasets: [{
+                        label: 'Gaze Direction Counts',
+                        data: [0, 0, 0, 0, 0],
+                        backgroundColor: ['#36A2EB', '#FFCE56', '#4BC0C0', '#FF6384', '#9966FF'],
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1,
+                                precision: 0
+                            }
+                        }
+                    }
+                }
+            });
+
+            // get live gaze direction data every 1000 milliseconds
+            setInterval(() => {
+                if ($('#startButton').prop('disabled')) {
+                    fetchGazeDirection();
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

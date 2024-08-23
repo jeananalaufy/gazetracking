@@ -1,0 +1,348 @@
+<!-- This is the feedback/progress page -->
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Performance Score</title>
+    <style>
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background-color: #000000;
+            color: #ffffff;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .title, .score, .historical-data, .feedback {
+            margin: 20px 0;
+        }
+        .scenario-info {
+            margin: 10px 0;
+            font-size: 0.8em; 
+        }
+        h1, h2, h3 {
+            font-weight: 700;
+        }
+        .score {
+            font-size: 2em;
+            font-weight: bold;
+            color: #007bff; 
+            background-color: #333;
+            padding: 20px;
+            border-radius: 10px;
+        }
+        .feedback {
+            font-size: 1.2em;
+            color: #ffffff; 
+            text-align: center;
+        }
+        canvas {
+            width: 80%;
+            max-width: 1000px;
+            height: 500px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 18px;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            margin-top: 20px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <!-- Title -->
+    <div class="title">
+        <h1>Performance Score</h1>
+    </div>
+
+    <!-- Display selected scenario -->
+    <div class="scenario-info">
+        <h2>Your selected scenario is <span id="scenarioDescription"></span></h2>
+    </div>
+
+    <!-- Display performance score -->
+    <div class="score" id="performanceScore">
+    </div>
+
+    <!-- Display feedback -->
+    <div class="feedback" id="feedbackMessage">
+    </div>
+
+    <!-- Performance data chart (=Line chart) -->
+    <div class="historical-data">
+        <h3>Your Performance Data</h3>
+        <canvas id="historicalChart"></canvas>
+    </div>
+
+    <button id="practiceAgainButton">Practice Again</button>
+    <button id="clearSessionsButton">Clear Sessions</button>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Get selected scenario and description from localStorage
+        const selectedScenario = localStorage.getItem('selectedScenario');
+        const selectedScenarioDescription = localStorage.getItem('selectedScenarioDescription');
+        const gazeData = JSON.parse(localStorage.getItem('gazeData')) || { 'Looking right': 0, 'Looking left': 0, 'Looking center': 0, 'Blinking': 0, 'No gaze detected': 0 }; //or set default 
+        let interviewScores = JSON.parse(localStorage.getItem('interviewScores')) || [];
+        let presentationScores = JSON.parse(localStorage.getItem('presentationScores')) || [];
+        let currentInterviewSession = localStorage.getItem('currentInterviewSession') || 1;
+        let currentPresentationSession = localStorage.getItem('currentPresentationSession') || 1;
+
+        // Function to calculate performance score for Interview scenario
+        function calculateInterviewPerformance(gazeData) {
+            let totalGazes = gazeData['Looking center']  + gazeData['Looking right'] + gazeData['Looking left'];
+            if (totalGazes === 0) return "0.00";
+
+            const idealProportions = {
+                center: 0.7 //fixed value for interview scenario center proportion, set to 0.7
+            };
+
+            const actualProportions = {
+                center: gazeData['Looking center'] / totalGazes
+            };
+
+            const deviation = Math.abs(actualProportions.center - idealProportions.center);
+
+            // Calculate performance score based on deviation from ideal proportion
+            let performanceScore = (1 - deviation) * 100;
+            performanceScore = Math.max(performanceScore, 0).toFixed(2);
+
+            return performanceScore;
+        }
+
+        // Function to calculate performance score for Presentation scenario
+        function calculatePresentationPerformance(gazeData) {
+            let totalGazes = gazeData['Looking right'] + gazeData['Looking left'] + gazeData['Looking center'];
+            if (totalGazes === 0) return "0.00";
+
+            // get ideal count for each direction
+            let idealCount = totalGazes / 3; //divide total gazes by 3 
+
+            // Calculate deviations from the ideal count per gaze direction
+            let deviationRight = Math.abs(gazeData['Looking right'] - idealCount);
+            let deviationLeft = Math.abs(gazeData['Looking left'] - idealCount);
+            let deviationCenter = Math.abs(gazeData['Looking center'] - idealCount);
+            let totalDeviation = ((deviationRight + deviationLeft + deviationCenter) /2) ; //new: divide total deviation by 2 
+
+
+            // Calculate performance score
+            let performanceScore = 100 - (totalDeviation / (idealCount * 3)) * 100;
+
+            // make sure the performance score does not fall below zero
+            performanceScore = Math.max(performanceScore, 0).toFixed(2);
+
+            return performanceScore;
+        }
+
+        // Function to provide feedback based on the performance score
+        function provideFeedback(score, previousScore) {
+            let feedbackMessage = '';
+            score = parseFloat(score);
+
+            if (score < 50) { //if score is less than 50
+                feedbackMessage = 'You can do better! Keep practicing and you will improve!';
+            } else if (previousScore != null && score > previousScore) {  //if score is greater than previous score
+                feedbackMessage = `Well done! You have improved from your last score of ${previousScore.toFixed(2)}!`;
+            } else if (previousScore != null && score < previousScore) {   //if score is less than previous score
+                feedbackMessage = `Don't worry, you can improve! Your previous score was ${previousScore.toFixed(2)}.`;
+            } else {  //otherwise, display this message
+                feedbackMessage = 'Good job! Keep practicing to maintain or improve your score!';
+            }
+
+            return feedbackMessage;
+        }
+
+        // Function to create a message based on  most common gaze direction and selected scenario
+        function generateGazeFeedback(scenario, gazeData) {
+            const directions = ['Looking right', 'Looking left', 'Looking center', 'Blinking', 'No gaze detected'];
+            let mostCommonDirection = directions.reduce((a, b) => gazeData[a] > gazeData[b] ? a : b); // get the most common gaze direction
+            let message = '';
+
+            if (scenario === 'Interview') {  //tip for interview scenario
+                switch (mostCommonDirection) {
+                    case 'Looking right':
+                        message = 'Tip: Your most common gaze direction is to the right. Focus on looking towards the center to engage with your interviewer.';
+                        break;
+                    case 'Looking left':
+                        message = 'Tip: Your most common gaze direction is to the left. Focus on looking towards the center to engage with your interviewer.';
+                        break;
+                    case 'Looking center':
+                        message = 'Tip: Great! Your most common gaze direction is center. Keep it up!';
+                        break;
+                    case 'Blinking':
+                        message = 'Tip: You seem to be blinking frequently. Ensure your blinks are natural and not too frequent.';
+                        break;
+                    case 'No gaze detected':
+                        message = 'No gaze detected consistently. Ensure your face is visible and well-lit.';
+                        break;
+                    default:
+                        message = 'No significant gaze data available.';
+                }
+            } else if (scenario === 'Presentation') {  //tip for presentation scenario
+                switch (mostCommonDirection) {
+                    case 'Looking right':
+                        message = 'Tip: You are looking to the right often. Try to balance your gaze across the audience.';
+                        break;
+                    case 'Looking left':
+                        message = 'Tip: You are looking to the left often. Try to balance your gaze across the audience.';
+                        break;
+                    case 'Looking center':
+                        message = 'Tip: You are maintaining good focus at the center. Remember to look towards the right and left as well.';
+                        break;
+                    case 'Blinking':
+                        message = 'Tip: You are blinking too often, try to balance your gaze across the audience.';
+                        break;
+                    case 'No gaze detected':
+                        message = 'No gaze detected consistently. Ensure your face is visible and well-lit.';
+                        break;
+                    default:
+                        message = 'No significant gaze data available.';
+                }
+            }
+
+            return message;
+        }
+
+        // Function to update the text color of the performance score display
+        function updatePerformanceScoreColor(score) {
+            const scoreElement = document.getElementById('performanceScore');
+            score = parseFloat(score);
+            let color = '#007bff'; 
+
+            if (score <= 30) {
+                color = 'red';
+            } else if (score <= 70) {
+                color = 'yellow';
+            } else {
+                color = 'green';
+            }
+
+            scoreElement.style.color = color;
+        }
+
+        // Function to display performance score based on scenario
+        function displayPerformanceScore(scenario, gazeData) {
+            let performanceScore = "0.00";
+            let previousScore = null;
+
+            if (scenario === 'Interview') {
+                performanceScore = calculateInterviewPerformance(gazeData);  //run function to calculate performance score
+                previousScore = interviewScores.length > 0 ? parseFloat(interviewScores[interviewScores.length - 1].score) : null; //get previous score
+                interviewScores.push({ session: currentInterviewSession, score: performanceScore }); //add new score
+                localStorage.setItem('interviewScores', JSON.stringify(interviewScores)); //store new score
+            } else if (scenario === 'Presentation') {
+                performanceScore = calculatePresentationPerformance(gazeData); //run function to calculate performance score
+                previousScore = presentationScores.length > 0 ? parseFloat(presentationScores[presentationScores.length - 1].score) : null; //(same)  - get previous score
+                presentationScores.push({ session: currentPresentationSession, score: performanceScore }); //add new score
+                localStorage.setItem('presentationScores', JSON.stringify(presentationScores)); //store new score
+            } else {
+                document.getElementById('performanceScore').innerText = 'Unknown scenario';  //display this message if scenario is unknown
+                return; 
+            }
+
+            document.getElementById('performanceScore').innerText = `Score: ${performanceScore}`; //display the score
+            updatePerformanceScoreColor(performanceScore); // Update color based on score
+            const feedbackMessage = provideFeedback(performanceScore, previousScore); //run the function to provide feedback
+            document.getElementById('feedbackMessage').innerText = feedbackMessage; //display performance  score feedback
+
+            // Display gaze feedback
+            const gazeFeedbackMessage = generateGazeFeedback(scenario, gazeData); //run the function to generate gaze feedback
+            const feedbackElement = document.createElement('p');  
+            feedbackElement.innerText = gazeFeedbackMessage; //display gaze feedback
+            document.getElementById('feedbackMessage').appendChild(feedbackElement); //display feedback
+        }
+
+        // Function to display historical performance data = Line chart
+        function displayHistoricalData(scores) { 
+            scores = scores.filter(score => score && score.session && score.score !== undefined); //in case there are undefined scores
+            const ctx = document.getElementById('historicalChart').getContext('2d'); //historical chart  (line)
+            const sessions = scores.map(score => `Session ${score.session}`); //session number
+            const scoresData = scores.map(score => parseFloat(score.score)); //session performance score
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: sessions,
+                    datasets: [{
+                        label: 'Performance Score',
+                        data: scoresData,
+                        borderColor: '#36A2EB',
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: 'Sessions'  //x axis label
+                            }
+                        },
+                        y: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: 'Score'   //y axis label
+                            },
+                            suggestedMin: 0,
+                            suggestedMax: 100
+                        }
+                    }
+                }
+            });
+        }
+
+        // Display selected scenario description
+        document.getElementById('scenarioDescription').innerText = selectedScenarioDescription || 'No scenario chosen'; //otherwise display 'No scenario chosen'
+
+        // Calculate and display performance score 
+        displayPerformanceScore(selectedScenario, gazeData);
+
+        // Display historical performance data based on scenario
+        if (selectedScenario === 'Interview') {
+            displayHistoricalData(interviewScores);
+        } else if (selectedScenario === 'Presentation') {
+            displayHistoricalData(presentationScores);
+        }
+
+        // Practice again button 
+        document.getElementById('practiceAgainButton').addEventListener('click', function() {
+            if (selectedScenario === 'Interview') {
+                currentInterviewSession = parseInt(currentInterviewSession) + 1; //to keep track of sessions
+                localStorage.setItem('currentInterviewSession', currentInterviewSession);
+            } else if (selectedScenario === 'Presentation') {
+                currentPresentationSession = parseInt(currentPresentationSession) + 1;
+                localStorage.setItem('currentPresentationSession', currentPresentationSession);
+            }
+            window.location.href = '/';
+        });
+
+        // Clear sessions button 
+        document.getElementById('clearSessionsButton').addEventListener('click', function() {
+            if (selectedScenario === 'Interview') {
+                localStorage.removeItem('interviewScores');
+                localStorage.removeItem('currentInterviewSession');
+            } else if (selectedScenario === 'Presentation') {
+                localStorage.removeItem('presentationScores');
+                localStorage.removeItem('currentPresentationSession');
+            }
+            window.location.reload();
+        });
+    </script>
+</body>
+</html>
